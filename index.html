@@ -1,349 +1,177 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Canlı Kapı Müşteri Takip Sistemi</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚪</text></svg>">
-    <!-- Tailwind CSS Bağlantısı -->
-    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-    <style>
-        .active-pulse {
-            box-shadow: 0 0 15px rgba(34, 197, 94, 0.6);
-            animation: pulse 2s infinite;
-        }
-        @keyframes pulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.02); }
-        }
-    </style>
-</head>
-<body class="bg-slate-900 text-slate-100 min-h-screen font-sans p-4 md:p-8">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Canlı Kapı Müşteri Takip Sistemi</title>
+  <style>
+    :root {
+      --primary: #2563eb;
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --text: #0f172a;
+      --text-muted: #64748b;
+      --border: #e2e8f0;
+    }
 
-    <!-- ÜST BAŞLIK -->
-    <header class="max-w-6xl mx-auto mb-6 flex flex-wrap items-center justify-between gap-3">
-        <h1 class="text-2xl md:text-3xl font-extrabold tracking-tight">🚪 Canlı Kapı <span class="text-slate-400 font-semibold">Müşteri Takip</span></h1>
-        <span id="baglantiDurum" class="text-xs px-3 py-1 rounded-full border border-slate-700 bg-slate-800 text-slate-400">Bağlanıyor...</span>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: var(--bg); color: var(--text); padding: 20px; line-height: 1.5; }
+    .container { max-width: 900px; margin: 0 auto; }
+    header { text-align: center; margin-bottom: 2rem; }
+    h1 { font-size: 1.875rem; font-weight: 700; color: var(--primary); }
+    .status-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 9999px; font-size: 0.875rem; font-weight: 500; margin-top: 8px; }
+    .status-online { background-color: #dcfce7; color: #166534; }
+    .status-offline { background-color: #fee2e2; color: #991b1b; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .dot-online { background-color: #22c55e; }
+    .dot-offline { background-color: #ef4444; }
+
+    .card { background: var(--card-bg); border-radius: 12px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 24px; border: 1px solid var(--border); }
+    .form-group { display: flex; gap: 12px; }
+    input[type="text"] { flex: 1; padding: 10px 16px; border: 1px solid var(--border); border-radius: 8px; font-size: 1rem; outline: none; }
+    input[type="text"]:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+    
+    button { background-color: var(--primary); color: white; border: none; padding: 10px 20px; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: opacity 0.2s; }
+    button:hover { opacity: 0.9; }
+    button.btn-danger { background-color: #ef4444; }
+    button.btn-success { background-color: #22c55e; }
+    
+    .list-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .customer-list { list-style: none; }
+    .customer-item { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--border); }
+    .customer-item:last-child { border-bottom: none; }
+    .customer-info { display: flex; align-items: center; gap: 12px; }
+    .queue-number { font-weight: 700; color: var(--primary); min-width: 28px; }
+    .actions { display: flex; gap: 8px; }
+    .empty-state { text-align: center; color: var(--text-muted); padding: 32px 0; }
+  </style>
+
+  <!-- Firebase SDK Modules -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getDatabase, ref, onValue, push, remove, set } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+    // Firebase Config
+    const firebaseConfig = {
+      apiKey: "AIzaSyAzstpi_Xd0CLwqcMFGc5_JxqgbDgOANYw",
+      authDomain: "kapi-takip-a122c.firebaseapp.com",
+      databaseURL: "https://kapi-takip-a122c-default-rtdb.firebaseio.com",
+      projectId: "kapi-takip-a122c",
+      storageBucket: "kapi-takip-a122c.firebasestorage.app",
+      messagingSenderId: "600247591603",
+      appId: "1:600247591603:web:df76596573b6f60d8d86c6",
+      measurementId: "G-WQFDN2SCZ7"
+    };
+
+    // Firebase Başlat
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    const customersRef = ref(db, "customers");
+
+    // DOM Elemanları
+    const form = document.getElementById("customer-form");
+    const nameInput = document.getElementById("customer-name");
+    const listElement = document.getElementById("customer-list");
+    const statusBadge = document.getElementById("status-badge");
+    const statusText = document.getElementById("status-text");
+    const statusDot = document.getElementById("status-dot");
+
+    // Gerçek Zamanlı Veri Dinleme
+    onValue(customersRef, (snapshot) => {
+      // Bağlantı Başarılı
+      statusBadge.className = "status-badge status-online";
+      statusDot.className = "dot dot-online";
+      statusText.textContent = "Canlı Senkronize";
+
+      listElement.innerHTML = "";
+      const data = snapshot.val();
+
+      if (!data) {
+        listElement.innerHTML = `<li class="empty-state">Şu anda sırada kimse yok.</li>`;
+        return;
+      }
+
+      let index = 1;
+      Object.keys(data).forEach((key) => {
+        const item = data[key];
+        const li = document.createElement("li");
+        li.className = "customer-item";
+        li.innerHTML = `
+          <div class="customer-info">
+            <span class="queue-number">#${index}</span>
+            <span class="customer-name">${escapeHtml(item.name)}</span>
+          </div>
+          <div class="actions">
+            <button class="btn-danger" data-id="${key}">Sil / Sıradan Çıkar</button>
+          </div>
+        `;
+        listElement.appendChild(li);
+        index++;
+      });
+    }, (error) => {
+      statusBadge.className = "status-badge status-offline";
+      statusDot.className = "dot dot-offline";
+      statusText.textContent = "Bağlantı Hatası";
+      console.error("Firebase Hatası:", error);
+    });
+
+    // Yeni Müşteri Ekleme
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const name = nameInput.value.trim();
+      if (name) {
+        push(customersRef, {
+          name: name,
+          timestamp: Date.now()
+        }).then(() => {
+          nameInput.value = "";
+        });
+      }
+    });
+
+    // Müşteri Silme
+    listElement.addEventListener("click", (e) => {
+      if (e.target.classList.contains("btn-danger")) {
+        const id = e.target.getAttribute("data-id");
+        if (id) {
+          remove(ref(db, `customers/${id}`));
+        }
+      }
+    });
+
+    // XSS Güvenlik Temizliği
+    function escapeHtml(str) {
+      return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+  </script>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Kapı Müşteri Takip Sistemi</h1>
+      <div id="status-badge" class="status-badge status-offline">
+        <span id="status-dot" class="dot dot-offline"></span>
+        <span id="status-text">Bağlanıyor...</span>
+      </div>
     </header>
 
-    <div class="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
-        <!-- SOL SÜTUN: MÜŞTERİ GİRİŞİ VE BEKLEYENLER -->
-        <div class="lg:col-span-2 space-y-6">
-            
-            <!-- Yeni Müşteri Girişi -->
-            <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl">
-                <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
-                    <h2 class="text-xl font-bold flex items-center text-blue-400">🚪 Kapı Müşterisi Girişi</h2>
-                    <span class="text-xs text-slate-400 bg-slate-900/60 border border-slate-700/60 px-2.5 py-1 rounded-lg">İsim yazmak zorunlu değildir</span>
-                </div>
-                <div class="space-y-3">
-                    <div class="flex flex-col sm:flex-row gap-2">
-                        <input id="musteriAd" type="text" maxlength="120" placeholder="Müşteri Adı / Tanımı (İsteğe bağlı, boş bırakabilirsiniz)..." 
-                               class="bg-slate-700 border border-slate-600 rounded-xl px-4 py-3 w-full text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                               onkeypress="if(event.key === 'Enter') musteriEkle()">
-                        <div class="flex gap-2 shrink-0">
-                            <button id="direktAlBtn" onclick="musteriAl()" title="İsim yazmadan da direkt sıradaki personele müşteri atar" class="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold px-4 py-3 rounded-xl transition cursor-pointer flex items-center gap-1.5 shadow-lg shadow-emerald-950/40">
-                                <span>⚡</span>
-                                <span id="direktAlBtnYazi">Direkt Al</span>
-                            </button>
-                            <button id="ekleBtn" onclick="musteriEkle()" title="Müşteriyi bekleyenler sırasına ekler" class="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold px-4 py-3 rounded-xl transition cursor-pointer whitespace-nowrap">
-                                + Sıraya Ekle
-                            </button>
-                        </div>
-                    </div>
-                    <p class="text-xs text-slate-400 flex items-center gap-1.5">
-                        <span class="text-emerald-400">💡 İpucu:</span>
-                        <span>İsim yazmadan doğrudan sıradaki personelin butonuna basarak veya <strong class="text-emerald-300">Direkt Al</strong> ile müşteriyi hemen alabilirsiniz.</span>
-                    </p>
-                </div>
-            </div>
+    <main>
+      <div class="card">
+        <form id="customer-form" class="form-group">
+          <input type="text" id="customer-name" placeholder="Müşteri Adı Soyadı" required autocomplete="off">
+          <button type="submit">Sıraya Ekle</button>
+        </form>
+      </div>
 
-            <!-- Bekleyen Müşteri Sırası -->
-            <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl">
-                <h2 class="text-xl font-bold mb-4 text-amber-400 flex items-center justify-between">
-                    <span>⏳ Bekleyen Müşteri Sırası</span>
-                    <span id="toplamBekleyen" class="text-sm bg-amber-500/20 text-amber-400 px-3 py-1 rounded-full border border-amber-500/30">0 Kişi</span>
-                </h2>
-                <div id="bekleyenListesi" class="space-y-3">
-                    <p class="text-slate-500 text-center py-6 text-sm">Yükleniyor...</p>
-                </div>
-            </div>
+      <div class="card">
+        <div class="list-header">
+          <h2>Bekleyen Müşteriler</h2>
         </div>
-
-        <!-- SAĞ SÜTUN: PERSONEL YÖNETİMİ VE İSTATİSTİK -->
-        <div class="space-y-6">
-            
-            <!-- Personel Yönetimi -->
-            <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl">
-                <h2 class="text-xl font-bold mb-2 text-emerald-400">👥 Personel Yönetimi</h2>
-                <p class="text-sm text-slate-400 mb-4">Şu an sıradaki personel: <span id="siradakiPersonelBadge" class="font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2 py-1 rounded text-xs">...</span></p>
-                
-                <div class="space-y-4">
-                    <!-- KORAY BUTON -->
-                    <div id="btn-KORAY-container" class="rounded-xl border transition-all">
-                        <button id="btn-KORAY" onclick="musteriAl('KORAY')" class="w-full text-white font-semibold py-4 px-4 rounded-xl flex justify-between items-center transition cursor-pointer">
-                            <span class="flex items-center gap-2">🙋‍♂️ KORAY <span id="sayac-KORAY" class="text-xs bg-slate-900 text-slate-300 px-2 py-1 rounded-md font-normal border border-slate-700">0 Müşteri</span></span>
-                            <span id="durum-KORAY" class="text-xs px-2 py-1 rounded-md">Bekliyor</span>
-                        </button>
-                    </div>
-
-                    <!-- SELİN BUTON -->
-                    <div id="btn-SELİN-container" class="rounded-xl border transition-all">
-                        <button id="btn-SELİN" onclick="musteriAl('SELİN')" class="w-full text-white font-semibold py-4 px-4 rounded-xl flex justify-between items-center transition cursor-pointer">
-                            <span class="flex items-center gap-2">🙋‍♀️ SELİN <span id="sayac-SELİN" class="text-xs bg-slate-900 text-slate-300 px-2 py-1 rounded-md font-normal border border-slate-700">0 Müşteri</span></span>
-                            <span id="durum-SELİN" class="text-xs px-2 py-1 rounded-md">Bekliyor</span>
-                        </button>
-                    </div>
-
-                    <!-- FATİH BUTON -->
-                    <div id="btn-FATİH-container" class="rounded-xl border transition-all">
-                        <button id="btn-FATİH" onclick="musteriAl('FATİH')" class="w-full text-white font-semibold py-4 px-4 rounded-xl flex justify-between items-center transition cursor-pointer">
-                            <span class="flex items-center gap-2">🙋‍♂️ FATİH <span id="sayac-FATİH" class="text-xs bg-slate-900 text-slate-300 px-2 py-1 rounded-md font-normal border border-slate-700">0 Müşteri</span></span>
-                            <span id="durum-FATİH" class="text-xs px-2 py-1 rounded-md">Bekliyor</span>
-                        </button>
-                    </div>
-                </div>
-
-                <!-- PAS GEÇ BUTONU -->
-                <button onclick="pasGec()" class="mt-4 w-full bg-amber-600/20 hover:bg-amber-600/30 text-amber-400 font-medium py-3 rounded-xl border border-amber-500/30 transition text-sm flex items-center justify-center gap-2 cursor-pointer">
-                    ⏭️ Sıradakini Pas Geç (Yoğunluk Durumu)
-                </button>
-            </div>
-
-            <!-- Son Alınan Müşteriler -->
-            <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl">
-                <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-xl font-bold text-purple-400">✅ Son Alınanlar</h2>
-                    <button onclick="gunuSifirla()" class="text-xs bg-rose-600/20 hover:bg-rose-600/40 text-rose-400 px-2 py-1 rounded border border-rose-500/30 transition cursor-pointer">🔄 Günü Sıfırla</button>
-                </div>
-                <div id="gecmisListesi" class="space-y-2 max-h-60 overflow-y-auto pr-1">
-                    <!-- Dinamik Geçmiş Buraya Gelecek -->
-                </div>
-            </div>
-
-        </div>
-    </div>
-
-    <!-- Bildirim (Toast) -->
-    <div id="bildirim" class="fixed bottom-6 left-1/2 -translate-x-1/2 px-5 py-3 rounded-xl shadow-2xl text-sm font-medium border transition-all duration-300 opacity-0 pointer-events-none translate-y-4"></div>
-
-    <script>
-        // Veriler artık ortak veritabanında tutuluyor; tüm cihazlar aynı sırayı görür.
-        const API = '/api/kapi';
-        const YENILEME_MS = 3000;
-
-        let personeller = ["KORAY", "SELİN", "FATİH"];
-        let sira = [];
-        let gecmis = [];
-        let sayaclar = { "KORAY": 0, "SELİN": 0, "FATİH": 0 };
-        let aktifIndex = 0;
-        let islemSuruyor = false;
-
-        // HTML'e yazılan kullanıcı metnini güvenli hale getir
-        function guvenli(metin) {
-            return String(metin).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-        }
-
-        function saat(tarih) {
-            return tarih ? new Date(tarih).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) : '';
-        }
-
-        let bildirimZamanlayici;
-        function bildirimGoster(mesaj, tur = 'bilgi') {
-            const el = document.getElementById('bildirim');
-            const renk = tur === 'hata'
-                ? 'bg-rose-950 border-rose-500/40 text-rose-200'
-                : 'bg-emerald-950 border-emerald-500/40 text-emerald-200';
-            el.className = `fixed bottom-6 left-1/2 -translate-x-1/2 px-5 py-3 rounded-xl shadow-2xl text-sm font-medium border transition-all duration-300 ${renk}`;
-            el.innerText = mesaj;
-            clearTimeout(bildirimZamanlayici);
-            bildirimZamanlayici = setTimeout(() => {
-                el.classList.add('opacity-0', 'pointer-events-none', 'translate-y-4');
-            }, 2600);
-        }
-
-        function baglantiGoster(cevrimici) {
-            const el = document.getElementById('baglantiDurum');
-            el.innerText = cevrimici ? '🟢 Canlı · Tüm cihazlarda eşit' : '🔴 Bağlantı yok · Tekrar deneniyor';
-            el.className = cevrimici
-                ? 'text-xs px-3 py-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
-                : 'text-xs px-3 py-1 rounded-full border border-rose-500/30 bg-rose-500/10 text-rose-400';
-        }
-
-        function durumuUygula(veri) {
-            personeller = veri.personeller;
-            sira = veri.sira;
-            gecmis = veri.gecmis;
-            sayaclar = veri.sayaclar;
-            aktifIndex = veri.aktifIndex;
-            arayuzCiz();
-        }
-
-        // Sunucudan güncel durumu çek
-        async function yenile() {
-            try {
-                const res = await fetch(API, { cache: 'no-store' });
-                if (!res.ok) throw new Error();
-                const veri = await res.json();
-                if (!islemSuruyor) durumuUygula(veri);
-                baglantiGoster(true);
-            } catch {
-                baglantiGoster(false);
-            }
-        }
-
-        // Sunucuya işlem gönder ve dönen güncel durumu yansıt
-        async function islemGonder(govde) {
-            if (islemSuruyor) return null;
-            islemSuruyor = true;
-            try {
-                const res = await fetch(API, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(govde),
-                });
-                const veri = await res.json().catch(() => ({}));
-                if (veri.personeller) durumuUygula(veri);
-                baglantiGoster(true);
-                if (!res.ok) {
-                    bildirimGoster(veri.hata || 'İşlem tamamlanamadı.', 'hata');
-                    return null;
-                }
-                return veri;
-            } catch {
-                baglantiGoster(false);
-                bildirimGoster('Sunucuya ulaşılamadı. İnternet bağlantınızı kontrol edin.', 'hata');
-                return null;
-            } finally {
-                islemSuruyor = false;
-            }
-        }
-
-        async function musteriEkle() {
-            const input = document.getElementById('musteriAd');
-            const ad = (input ? input.value.trim() : '') || 'Kapı Müşterisi';
-            const btn = document.getElementById('ekleBtn');
-            if (btn) btn.disabled = true;
-            const veri = await islemGonder({ islem: 'ekle', ad });
-            if (veri) {
-                if (input) input.value = '';
-                bildirimGoster(`“${ad}” sıraya eklendi.`);
-            }
-            if (btn) btn.disabled = false;
-            if (input) input.focus();
-        }
-
-        async function musteriAl(personel) {
-            const siradaki = personeller[aktifIndex];
-            const hedefPersonel = personel || siradaki;
-            if (siradaki !== hedefPersonel) {
-                bildirimGoster(`Sıra ${siradaki} personelinde.`, 'hata');
-                return;
-            }
-            const input = document.getElementById('musteriAd');
-            const girilenAd = input ? input.value.trim() : '';
-
-            const direktBtn = document.getElementById('direktAlBtn');
-            if (direktBtn) direktBtn.disabled = true;
-
-            const veri = await islemGonder({ islem: 'al', personel: hedefPersonel, ad: girilenAd });
-            if (direktBtn) direktBtn.disabled = false;
-
-            if (veri) {
-                if (input && (girilenAd === '' || veri.alinanMusteri === girilenAd)) {
-                    input.value = '';
-                }
-                const musteri = veri.alinanMusteri || (sira.length > 0 ? sira[0].ad : (girilenAd || 'Kapı Müşterisi'));
-                bildirimGoster(`${hedefPersonel}, “${musteri}” müşterisini aldı.`);
-            }
-        }
-
-        async function pasGec() {
-            const pasGecilen = personeller[aktifIndex];
-            if (await islemGonder({ islem: 'pas', beklenenIndex: aktifIndex })) {
-                bildirimGoster(`${pasGecilen} pas geçildi. Sıra ${personeller[aktifIndex]} personelinde.`);
-            }
-        }
-
-        async function gunuSifirla() {
-            if (!confirm('Tüm sıra, geçmiş ve sayaçlar silinecek. Günü sıfırlamak istediğinize emin misiniz?')) return;
-            if (await islemGonder({ islem: 'sifirla' })) {
-                bildirimGoster('Gün sıfırlandı. Sıra KORAY ile başlıyor.');
-            }
-        }
-
-        // Ekranı Çizen ve Güncel Durumu Yansıtan Ana Fonksiyon
-        function arayuzCiz() {
-            const siradakiPersonel = personeller[aktifIndex];
-            document.getElementById('siradakiPersonelBadge').innerText = siradakiPersonel;
-            document.getElementById('toplamBekleyen').innerText = `${sira.length} Kişi`;
-
-            const direktAlBtnYazi = document.getElementById('direktAlBtnYazi');
-            if (direktAlBtnYazi) {
-                direktAlBtnYazi.innerText = `Direkt Al (${siradakiPersonel})`;
-            }
-
-            // Personel Butonlarının Durumlarını Güncelleme
-            personeller.forEach(p => {
-                const container = document.getElementById(`btn-${p}-container`);
-                const button = document.getElementById(`btn-${p}`);
-                const durumBadge = document.getElementById(`durum-${p}`);
-                const sayacBadge = document.getElementById(`sayac-${p}`);
-                if (!container) return;
-
-                // Alınan müşteri sayacını yazdır
-                sayacBadge.innerText = `${sayaclar[p] || 0} Müşteri`;
-
-                if (siradakiPersonel === p) {
-                    // Sırası gelen personelin tasarımı (Yeşil ve Canlı)
-                    container.className = "rounded-xl border border-emerald-500 bg-emerald-500/10 active-pulse";
-                    button.disabled = false;
-                    button.style.cursor = "pointer";
-                    durumBadge.innerText = sira.length ? "SIRADA · BEKLEYENİ AL" : "SIRADA · DİREKT AL";
-                    durumBadge.className = "text-xs bg-emerald-500 text-white px-2 py-1 rounded-md font-bold animate-pulse";
-                } else {
-                    // Sırasını bekleyenlerin tasarımı (Gri ve Kilitli)
-                    container.className = "rounded-xl border border-slate-700 bg-slate-700/40 opacity-50";
-                    button.disabled = true;
-                    button.style.cursor = "not-allowed";
-                    durumBadge.innerText = "Bekliyor";
-                    durumBadge.className = "text-xs bg-slate-900 text-slate-400 px-2 py-1 rounded-md border border-slate-800";
-                }
-            });
-
-            // Bekleyen Müşteri Listesini Çizme
-            const bListesi = document.getElementById('bekleyenListesi');
-            bListesi.innerHTML = sira.length === 0
-                ? '<p class="text-slate-500 text-center py-6 text-sm">Şu an kapıda bekleyen müşteri yok.</p>'
-                : sira.map((m, idx) => `
-                    <div class="flex justify-between items-center gap-3 bg-slate-700/40 p-4 rounded-xl border ${idx === 0 ? 'border-amber-500/40' : 'border-slate-700/60'} hover:border-slate-600 transition">
-                        <div class="min-w-0">
-                            <span class="font-medium text-base text-slate-200 break-words">${guvenli(m.ad)}</span>
-                            <span class="block text-xs text-slate-500 mt-0.5">Geliş: ${saat(m.gelis)}${idx === 0 ? ` · Sıradaki: <span class="text-emerald-400 font-semibold">${guvenli(siradakiPersonel)}</span>` : ''}</span>
-                        </div>
-                        <span class="shrink-0 text-xs bg-slate-900 px-3 py-1.5 rounded-full text-amber-400 font-bold border border-slate-700">Sıra: # ${idx + 1}</span>
-                    </div>`).join('');
-
-            // Son Alınanlar Listesini Çizme
-            const gListesi = document.getElementById('gecmisListesi');
-            gListesi.innerHTML = gecmis.length === 0
-                ? '<p class="text-slate-500 text-center py-4 text-sm">Henüz alınan müşteri yok.</p>'
-                : gecmis.map(g => `
-                    <div class="flex justify-between items-center gap-2 bg-slate-700/30 px-3 py-2 rounded-lg border border-slate-700/60 text-sm">
-                        <span class="text-slate-200 truncate">${guvenli(g.ad)}</span>
-                        <span class="shrink-0 flex items-center gap-2">
-                            <span class="text-xs font-bold text-purple-300 bg-purple-500/10 border border-purple-500/30 px-2 py-0.5 rounded">${guvenli(g.personel)}</span>
-                            <span class="text-xs text-slate-500">${saat(g.alinma)}</span>
-                        </span>
-                    </div>`).join('');
-        }
-
-        // İlk yükleme ve diğer cihazlarla canlı eşitleme
-        arayuzCiz();
-        yenile();
-        setInterval(() => { if (!document.hidden) yenile(); }, YENILEME_MS);
-        document.addEventListener('visibilitychange', () => { if (!document.hidden) yenile(); });
-    </script>
+        <ul id="customer-list" class="customer-list">
+          <li class="empty-state">Yükleniyor...</li>
+        </ul>
+      </div>
+    </main>
+  </div>
 </body>
 </html>
