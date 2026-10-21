@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Canlı Kapı Müşteri Takip Sistemi</title>
+  <style>
+    :root {
+      --primary: #2563eb;
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --text: #0f172a;
+      --text-muted: #64748b;
+      --border: #e2e8f0;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: var(--bg); color: var(--text); padding: 20px; line-height: 1.5; }
+    .container { max-width: 900px; margin: 0 auto; }
+    header { text-align: center; margin-bottom: 2rem; }
+    h1 { font-size: 1.875rem; font-weight: 700; color: var(--primary); }
+    .status-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 9999px; font-size: 0.875rem; font-weight: 500; margin-top: 8px; }
+    .status-online { background-color: #dcfce7; color: #166534; }
+    .status-offline { background-color: #fee2e2; color: #991b1b; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .dot-online { background-color: #22c55e; }
+    .dot-offline { background-color: #ef4444; }
+
+    .card { background: var(--card-bg); border-radius: 12px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 24px; border: 1px solid var(--border); }
+    .form-group { display: flex; gap: 12px; }
+    input[type="text"] { flex: 1; padding: 10px 16px; border: 1px solid var(--border); border-radius: 8px; font-size: 1rem; outline: none; }
+    input[type="text"]:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+    
+    button { background-color: var(--primary); color: white; border: none; padding: 10px 20px; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: opacity 0.2s; }
+    button:hover { opacity: 0.9; }
+    button.btn-danger { background-color: #ef4444; }
+    button.btn-success { background-color: #22c55e; }
+    
+    .list-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .customer-list { list-style: none; }
+    .customer-item { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--border); }
+    .customer-item:last-child { border-bottom: none; }
+    .customer-info { display: flex; align-items: center; gap: 12px; }
+    .queue-number { font-weight: 700; color: var(--primary); min-width: 28px; }
+    .actions { display: flex; gap: 8px; }
+    .empty-state { text-align: center; color: var(--text-muted); padding: 32px 0; }
+  </style>
+
+  <!-- Firebase SDK Modules -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getDatabase, ref, onValue, push, remove, set } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+    // Firebase Config
+    const firebaseConfig = {
+      apiKey: "AIzaSyAzstpi_Xd0CLwqcMFGc5_JxqgbDgOANYw",
+      authDomain: "kapi-takip-a122c.firebaseapp.com",
+      databaseURL: "https://kapi-takip-a122c-default-rtdb.firebaseio.com",
+      projectId: "kapi-takip-a122c",
+      storageBucket: "kapi-takip-a122c.firebasestorage.app",
+      messagingSenderId: "600247591603",
+      appId: "1:600247591603:web:df76596573b6f60d8d86c6",
+      measurementId: "G-WQFDN2SCZ7"
+    };
+
+    // Firebase Başlat
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    const customersRef = ref(db, "customers");
+
+    // DOM Elemanları
+    const form = document.getElementById("customer-form");
+    const nameInput = document.getElementById("customer-name");
+    const listElement = document.getElementById("customer-list");
+    const statusBadge = document.getElementById("status-badge");
+    const statusText = document.getElementById("status-text");
+    const statusDot = document.getElementById("status-dot");
+
+    // Gerçek Zamanlı Veri Dinleme
+    onValue(customersRef, (snapshot) => {
+      // Bağlantı Başarılı
+      statusBadge.className = "status-badge status-online";
+      statusDot.className = "dot dot-online";
+      statusText.textContent = "Canlı Senkronize";
+
+      listElement.innerHTML = "";
+      const data = snapshot.val();
+
+      if (!data) {
+        listElement.innerHTML = `<li class="empty-state">Şu anda sırada kimse yok.</li>`;
+        return;
+      }
+
+      let index = 1;
+      Object.keys(data).forEach((key) => {
+        const item = data[key];
+        const li = document.createElement("li");
+        li.className = "customer-item";
+        li.innerHTML = `
+          <div class="customer-info">
+            <span class="queue-number">#${index}</span>
+            <span class="customer-name">${escapeHtml(item.name)}</span>
+          </div>
+          <div class="actions">
+            <button class="btn-danger" data-id="${key}">Sil / Sıradan Çıkar</button>
+          </div>
+        `;
+        listElement.appendChild(li);
+        index++;
+      });
+    }, (error) => {
+      statusBadge.className = "status-badge status-offline";
+      statusDot.className = "dot dot-offline";
+      statusText.textContent = "Bağlantı Hatası";
+      console.error("Firebase Hatası:", error);
+    });
+
+    // Yeni Müşteri Ekleme
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const name = nameInput.value.trim();
+      if (name) {
+        push(customersRef, {
+          name: name,
+          timestamp: Date.now()
+        }).then(() => {
+          nameInput.value = "";
+        });
+      }
+    });
+
+    // Müşteri Silme
+    listElement.addEventListener("click", (e) => {
+      if (e.target.classList.contains("btn-danger")) {
+        const id = e.target.getAttribute("data-id");
+        if (id) {
+          remove(ref(db, `customers/${id}`));
+        }
+      }
+    });
+
+    // XSS Güvenlik Temizliği
+    function escapeHtml(str) {
+      return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+  </script>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Kapı Müşteri Takip Sistemi</h1>
+      <div id="status-badge" class="status-badge status-offline">
+        <span id="status-dot" class="dot dot-offline"></span>
+        <span id="status-text">Bağlanıyor...</span>
+      </div>
+    </header>
+
+    <main>
+      <div class="card">
+        <form id="customer-form" class="form-group">
+          <input type="text" id="customer-name" placeholder="Müşteri Adı Soyadı" required autocomplete="off">
+          <button type="submit">Sıraya Ekle</button>
+        </form>
+      </div>
+
+      <div class="card">
+        <div class="list-header">
+          <h2>Bekleyen Müşteriler</h2>
+        </div>
+        <ul id="customer-list" class="customer-list">
+          <li class="empty-state">Yükleniyor...</li>
+        </ul>
+      </div>
+    </main>
+  </div>
+</body>
+</html>
